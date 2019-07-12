@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import os
+import select
 import threading
 import time
 import uuid
@@ -37,14 +38,25 @@ def iterate_timeout(max_seconds, purpose):
     raise Exception("Timeout waiting for %s" % purpose)
 
 
+def _wait_for_connection(server, timeout=10):
+    time.sleep(1)
+    for _ in iterate_timeout(10, "available connections"):
+        if server.active_connections:
+            break
+
+
 class TestFunctional(tests.BaseTestCase):
     scenarios = [
-        ('no_ssl', dict(ssl=False)),
-        ('ssl', dict(ssl=True)),
+        ('no_ssl_with_epoll', dict(ssl=False, use_epoll=True)),
+        ('ssl_with_epoll', dict(ssl=True, use_epoll=True)),
+        ('no_ssl_without_epoll', dict(ssl=False, use_epoll=False)),
+        ('ssl_without_epoll', dict(ssl=True, use_epoll=False)),
     ]
 
     def setUp(self):
         super(TestFunctional, self).setUp()
+        if self.use_epoll and not hasattr(select, 'epoll'):
+            self.skipTest("Epoll not available.")
         if self.ssl:
             self.tmp_root = self.useFixture(fixtures.TempDir()).path
             root_subject, root_key = self.create_cert('root')
@@ -55,7 +67,8 @@ class TestFunctional(tests.BaseTestCase):
                 0,
                 os.path.join(self.tmp_root, 'server.key'),
                 os.path.join(self.tmp_root, 'server.crt'),
-                os.path.join(self.tmp_root, 'root.crt'))
+                os.path.join(self.tmp_root, 'root.crt'),
+                use_epoll=self.use_epoll)
             self.client = gear.Client('client')
             self.worker = gear.Worker('worker')
             self.client.addServer('127.0.0.1', self.server.port,
@@ -67,7 +80,7 @@ class TestFunctional(tests.BaseTestCase):
                                   os.path.join(self.tmp_root, 'worker.crt'),
                                   os.path.join(self.tmp_root, 'root.crt'))
         else:
-            self.server = gear.Server(0)
+            self.server = gear.Server(0, use_epoll=self.use_epoll)
             self.client = gear.Client('client')
             self.worker = gear.Worker('worker')
             self.client.addServer('127.0.0.1', self.server.port)
@@ -113,6 +126,7 @@ class TestFunctional(tests.BaseTestCase):
 
         for jobcount in range(2):
             job = gear.Job(b'test', b'testdata')
+            _wait_for_connection(self.server)
             self.client.submitJob(job)
             self.assertNotEqual(job.handle, None)
 
@@ -132,6 +146,7 @@ class TestFunctional(tests.BaseTestCase):
         self.worker.registerFunction('test')
 
         job = gear.Job(b'test', b'testdata')
+        _wait_for_connection(self.server)
         self.client.submitJob(job, background=True)
         self.assertNotEqual(job.handle, None)
         self.client.shutdown()
@@ -158,6 +173,7 @@ class TestFunctional(tests.BaseTestCase):
 
         for jobcount in range(2):
             job = gear.Job('test', b'testdata')
+            _wait_for_connection(self.server)
             self.client.submitJob(job)
             self.assertNotEqual(job.handle, None)
 
@@ -166,9 +182,16 @@ class TestFunctional(tests.BaseTestCase):
 
 
 class TestFunctionalText(tests.BaseTestCase):
+    scenarios = [
+        ('with_epoll', dict(use_epoll=True)),
+        ('without_epoll', dict(use_epoll=False)),
+    ]
+
     def setUp(self):
         super(TestFunctionalText, self).setUp()
-        self.server = gear.Server(0)
+        if self.use_epoll and not hasattr(select, 'epoll'):
+            self.skipTest("Epoll not available.")
+        self.server = gear.Server(0, use_epoll=self.use_epoll)
         self.client = gear.Client('client')
         self.worker = gear.TextWorker('worker')
         self.client.addServer('127.0.0.1', self.server.port)
@@ -181,6 +204,7 @@ class TestFunctionalText(tests.BaseTestCase):
 
         for jobcount in range(2):
             job = gear.TextJob('test', 'testdata')
+            _wait_for_connection(self.server)
             self.client.submitJob(job)
             self.assertNotEqual(job.handle, None)
 
@@ -202,6 +226,7 @@ class TestFunctionalText(tests.BaseTestCase):
         for jobcount in range(2):
             jobunique = uuid.uuid4().hex
             job = gear.TextJob('test', 'testdata', unique=jobunique)
+            _wait_for_connection(self.server)
             self.client.submitJob(job)
             self.assertNotEqual(job.handle, None)
 
@@ -224,6 +249,7 @@ class TestFunctionalText(tests.BaseTestCase):
 
         for jobcount in range(2):
             job = gear.TextJob('test', 'testdata')
+            _wait_for_connection(self.server)
             self.client.submitJob(job)
             self.assertNotEqual(job.handle, None)
 
@@ -241,6 +267,7 @@ class TestFunctionalText(tests.BaseTestCase):
     def test_grab_job_after_register(self):
         jobunique = uuid.uuid4().hex
         job = gear.TextJob('test', 'testdata', unique=jobunique)
+        _wait_for_connection(self.server)
         self.client.submitJob(job)
         self.assertNotEqual(job.handle, None)
 
