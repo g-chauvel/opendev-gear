@@ -5,9 +5,7 @@ fixtures>=0.3.12
 python-subunit
 pyOpenSSL
 statsd>=1.0.0,<3.0
-sphinx>=1.1.2,<1.2
 testrepository>=0.0.13
 testresources
 testscenarios
 testtools>=0.9.27
-sphinxcontrib-programoutput
