@@ -1,3 +1,58 @@
+- secret:
+    name: gear-opendev-dockerhub
+    data:
+      username: opendevzuul
+      password: !encrypted/pkcs1-oaep
+        - bROAu0oGBv+2l67dlC94t+s33rmdogBhWzyk7d/Zj7bSHZtfap2f1u+0RWogAKwjRtxtR
+          C6mqoVjKdWd+qBcnek0U/6Czgnhp5og3d9rsN+3SeQ9aOTTjoYkiqsg+c7N0rMh1AGndG
+          Qn3LU8i0EDGfzn5C+1KTcRHJ5brSrZzB+GsiXZxm8eLlupuFCep/yrUcnsH6f73sKGHQI
+          C9OcENQCelPLEdEtLb1eyx0hL1+o1ar0FdRCDrvZwih1SE/UUa18Zi7QCMEmkwZ8fil7B
+          zVtcBSTxTqIY49bgjerUykq0YKH1gTZrVC+UPFPjPZfNS39fxgcdqUMgbUTuWCoIrI0Jh
+          2pKg+KZ/3L8zqcmqOZFQOFvVi7zOtXdKZI3rmWRAzM/BgVXFeBsQZkGZ75TzE8Xm70uA4
+          WYdIva8kjBLrTz1/uRijZqNSrwM2fGO3VI+1SXUQI6FWJfZ+uSWzCDk9JswLPFzoXa7+J
+          ASDaygdGvU6q+pkxOQ/v9lgTnwZCdEAoCRdSZBKz/y3OosKAYIRIismLRJ9Kfkqxl8IEi
+          /0U+rSsWpWb5jufUcwAmL2Rj6YVcgUl3qSq2TzP3R+DPPda6Et4NZQ3RLpWP8if4VuNq7
+          gJ2yQTSLJLOG6nhDMRJoW3GLjUMWUw3sbvFE1VzcIggIs4mfxVp21Ps/6hRoAI=
+
+- job:
+    name: gear-build-opendev-image
+    parent: opendev-build-docker-image
+    description: Build OpenDev Docker images for gear
+    requires:
+      - python-base-container-image
+      - python-builder-container-image
+    provides: gear-container-image
+    vars: &gear_opendev_image_vars
+      zuul_work_dir: src/opendev.org/opendev/gear
+      docker_images:
+        - context: .
+          repository: opendevorg/geard
+          target: geard
+
+- job:
+    name: gear-upload-opendev-image
+    parent: opendev-upload-docker-image
+    description: Build OpenDev gear Docker images and upload to Docker Hub.
+    requires:
+      - python-base-container-image
+      - python-builder-container-image
+    provides: gear-container-image
+    vars: *gear_opendev_image_vars
+    secrets:
+      - name: docker_credentials
+        secret: gear-opendev-dockerhub
+        pass-to-parent: true
+
+- job:
+    name: gear-promote-opendev-image
+    parent: opendev-promote-docker-image
+    description: Promote previously uploaded gear Docker images.
+    vars: *gear_opendev_image_vars
+    secrets:
+      - name: docker_credentials
+        secret: gear-opendev-dockerhub
+        pass-to-parent: true
+
 - project:
     vars:
       release_python: python3
@@ -10,6 +65,7 @@
         - tox-py35:
             nodeset: ubuntu-xenial
         - build-python-release
+        - gear-build-opendev-image
     gate:
       jobs:
         - tox-pep8
@@ -17,9 +73,19 @@
         - tox-py35:
             nodeset: ubuntu-xenial
         - build-python-release
+        - gear-upload-opendev-image
     promote:
       jobs:
         - opendev-promote-python
+        - gear-promote-opendev-image
     release:
       jobs:
         - opendev-release-python
+        - upload-docker-image:
+            secrets:
+              name: docker_credentials
+              secret: gear-opendev-dockerhub
+              pass-to-parent: true
+            vars:
+              <<: *gear_opendev_image_vars
+              upload_docker_image_promote: false
