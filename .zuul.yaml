@@ -1,0 +1,23 @@
+- project:
+    templates:
+      - publish-opendev-tox-docs
+    check:
+      jobs:
+        - tox-pep8
+        - tox-py27
+        - tox-py35:
+            nodeset: ubuntu-xenial
+        - build-python-release
+    gate:
+      jobs:
+        - tox-pep8
+        - tox-py27
+        - tox-py35:
+            nodeset: ubuntu-xenial
+        - build-python-release
+    promote:
+      jobs:
+        - opendev-promote-python
+    release:
+      jobs:
+        - opendev-release-python
