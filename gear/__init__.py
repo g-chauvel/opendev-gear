@@ -191,7 +191,7 @@ class Connection(object):
             af, socktype, proto, canonname, sa = res
             try:
                 s = socket.socket(af, socktype, proto)
-                if self.keepalive:
+                if self.keepalive and hasattr(socket, 'TCP_KEEPIDLE'):
                     s.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
                     s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE,
                                  self.tcp_keepidle)
@@ -199,6 +199,9 @@ class Connection(object):
                                  self.tcp_keepintvl)
                     s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT,
                                  self.tcp_keepcnt)
+                elif self.keepalive:
+                    self.log.warning('Keepalive requested but not available '
+                                     'on this platform')
             except socket.error:
                 s = None
                 continue
@@ -2810,7 +2813,7 @@ class Server(BaseClientServer):
                 self.socket = socket.socket(af, socktype, proto)
                 self.socket.setsockopt(socket.SOL_SOCKET,
                                        socket.SO_REUSEADDR, 1)
-                if keepalive:
+                if keepalive and hasattr(socket, 'TCP_KEEPIDLE'):
                     self.socket.setsockopt(socket.SOL_SOCKET,
                                            socket.SO_KEEPALIVE, 1)
                     self.socket.setsockopt(socket.IPPROTO_TCP,
@@ -2819,6 +2822,9 @@ class Server(BaseClientServer):
                                            socket.TCP_KEEPINTVL, tcp_keepintvl)
                     self.socket.setsockopt(socket.IPPROTO_TCP,
                                            socket.TCP_KEEPCNT, tcp_keepcnt)
+                elif keepalive:
+                    self.log.warning('Keepalive requested but not available '
+                                     'on this platform')
             except socket.error:
                 self.socket = None
                 continue
