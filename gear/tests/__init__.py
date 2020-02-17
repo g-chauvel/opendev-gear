@@ -51,7 +51,7 @@ class BaseTestCase(testtools.TestCase, testresources.ResourcedTestCase):
             self.useFixture(fixtures.MonkeyPatch('sys.stderr', stderr))
 
         self.useFixture(fixtures.FakeLogger(
-            level=logging.INFO,
+            level=logging.DEBUG,
             format='%(asctime)s %(name)-32s '
             '%(levelname)-8s %(message)s'))
         self.useFixture(fixtures.NestedTempfile())
