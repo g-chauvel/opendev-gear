@@ -996,6 +996,17 @@ class BaseClientServer(object):
         end = time.time()
         self.reportTimingStats(packet.ptype, end - start)
 
+    def handleDisconnect(self, job):
+        """Handle a Gearman server disconnection.
+
+        If the Gearman server is disconnected, this will be called for any
+        jobs currently associated with the server.
+
+        :arg Job packet: The :py:class:`Job` that was running when the server
+            disconnected.
+        """
+        return job
+
     def reportTimingStats(self, ptype, duration):
         """Report processing times by packet type
 
@@ -1695,17 +1706,6 @@ class Client(BaseClient):
 
         packet.connection.handleOptionRes(packet.getArgument(0))
         task.setComplete()
-
-    def handleDisconnect(self, job):
-        """Handle a Gearman server disconnection.
-
-        If the Gearman server is disconnected, this will be called for any
-        jobs currently associated with the server.
-
-        :arg Job packet: The :py:class:`Job` that was running when the server
-            disconnected.
-        """
-        return job
 
 
 class FunctionRecord(object):
