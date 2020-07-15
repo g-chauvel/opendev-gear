@@ -91,6 +91,44 @@ def convert_to_bytes(data):
     return data
 
 
+def best_tls_version():
+    if hasattr(ssl, 'PROTOCOL_TLS'):
+        return ssl.PROTOCOL_TLS
+    # Note there is some risk in selecting tls 1.2 if available
+    # as both the client and server may not support it and need 1.1
+    # or 1.0. However, a xenial installation with python 3.5 does
+    # support 1.2 which is probably as old a setup as we need to worry
+    # about.
+    elif hasattr(ssl, 'PROTOCOL_TLSv1_2'):
+        return ssl.PROTOCOL_TLSv1_2
+    elif hasattr(ssl, 'PROTOCOL_TLSv1_1'):
+        return ssl.PROTOCOL_TLSv1_1
+    elif hasattr(ssl, 'PROTOCOL_TLSv1'):
+        return ssl.PROTOCOL_TLSv1
+    else:
+        raise ConnectionError('No supported TLS version available.')
+
+
+def create_ssl_context():
+    tls_version = best_tls_version()
+    context = ssl.SSLContext(tls_version)
+
+    # Disable TLSv1.3
+    # According to https://bugs.python.org/issue43622#msg389497, an event on
+    # ssl socket can happen without data being available at application level.
+    # As gear is using a polling loop with multiple file descriptors and ssl
+    # socket used as a blocking one, a blocked state could happen.
+    # This is highlighted by Zuul SSL test: TestSchedulerSSL, where such
+    # blocked state appears consistently.
+    # note: gear tests and zuul tests are ok for TLSv1.2 but this behavior
+    # could also happen
+    if (hasattr(ssl, 'PROTOCOL_TLS') and
+            tls_version == ssl.PROTOCOL_TLS):
+        context.options |= ssl.OP_NO_TLSv1_3
+
+    return context
+
+
 class Task(object):
     def __init__(self):
         self._wait_event = threading.Event()
@@ -209,7 +247,7 @@ class Connection(object):
 
             if self.use_ssl:
                 self.log.debug("Using SSL")
-                context = ssl.SSLContext(ssl.PROTOCOL_TLSv1)
+                context = create_ssl_context()
                 context.verify_mode = ssl.CERT_REQUIRED
                 context.check_hostname = False
                 context.load_cert_chain(self.ssl_cert, self.ssl_key)
@@ -2862,7 +2900,7 @@ class Server(BaseClientServer):
                     self.log.debug("Accepting new connection")
                     c, addr = self.socket.accept()
                     if self.use_ssl:
-                        context = ssl.SSLContext(ssl.PROTOCOL_TLSv1)
+                        context = create_ssl_context()
                         context.verify_mode = ssl.CERT_REQUIRED
                         context.load_cert_chain(self.ssl_cert, self.ssl_key)
                         context.load_verify_locations(self.ssl_ca)
