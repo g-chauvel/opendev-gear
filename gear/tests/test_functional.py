@@ -78,7 +78,7 @@ class TestFunctional(tests.BaseTestCase):
 
     def create_cert(self, cn, issuer=None, signing_key=None):
         key = crypto.PKey()
-        key.generate_key(crypto.TYPE_RSA, 1024)
+        key.generate_key(crypto.TYPE_RSA, 2048)
 
         cert = crypto.X509()
         subject = cert.get_subject()
@@ -97,7 +97,7 @@ class TestFunctional(tests.BaseTestCase):
         else:
             cert.set_issuer(subject)
         if signing_key:
-            cert.sign(signing_key, 'sha1')
+            cert.sign(signing_key, 'sha256')
         else:
             cert.sign(key, 'sha1')
 
