@@ -1250,15 +1250,18 @@ class BaseClient(BaseClientServer):
         start_time = time.time()
         while self.running:
             self.connections_condition.acquire()
-            while self.running and not self.active_connections:
-                if timeout is not None:
-                    self._checkTimeout(start_time, timeout)
-                self.log.debug("Waiting for at least one active connection")
-                self.connections_condition.wait(timeout=1)
-            if self.active_connections:
-                self.log.debug("Active connection found")
-                connected = True
-            self.connections_condition.release()
+            try:
+                while self.running and not self.active_connections:
+                    if timeout is not None:
+                        self._checkTimeout(start_time, timeout)
+                    self.log.debug("Waiting for at least one active "
+                                   "connection")
+                    self.connections_condition.wait(timeout=1)
+                if self.active_connections:
+                    self.log.debug("Active connection found")
+                    connected = True
+            finally:
+                self.connections_condition.release()
             if connected:
                 return
 
