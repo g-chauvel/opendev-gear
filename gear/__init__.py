@@ -15,6 +15,7 @@
 import errno
 import logging
 import os
+import random
 import select
 import six
 import socket
@@ -3298,7 +3299,13 @@ class Server(BaseClientServer):
 
     def wakeConnections(self, job=None):
         p = Packet(constants.RES, constants.NOOP, b'')
-        for connection in self.active_connections:
+
+        # Use a randomized copy of active_connections to try
+        # to spread workload across the machines that workers are on.
+        conns = self.active_connections[:]
+        random.shuffle(conns)    # Modifies the list
+
+        for connection in conns:
             if connection.state == 'SLEEP':
                 if ((job and job.name in connection.functions) or
                         (job is None)):
