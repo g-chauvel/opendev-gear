@@ -60,19 +60,25 @@
       - publish-opendev-tox-docs
     check:
       jobs:
-        - tox-pep8
+        - tox-linters
         - tox-py27
         - tox-py35:
             nodeset: ubuntu-xenial
-        - build-python-release
+        - tox-py39:
+            nodeset: ubuntu-focal
+        - build-python-release:
+            nodeset: ubuntu-focal
         - gear-build-opendev-image
     gate:
       jobs:
-        - tox-pep8
+        - tox-linters
         - tox-py27
         - tox-py35:
             nodeset: ubuntu-xenial
-        - build-python-release
+        - tox-py39:
+            nodeset: ubuntu-focal
+        - build-python-release:
+            nodeset: ubuntu-focal
         - gear-upload-opendev-image
     promote:
       jobs:
@@ -80,7 +86,8 @@
         - gear-promote-opendev-image
     release:
       jobs:
-        - opendev-release-python
+        - opendev-release-python:
+            nodeset: ubuntu-focal
         - upload-docker-image:
             secrets:
               name: docker_credentials
