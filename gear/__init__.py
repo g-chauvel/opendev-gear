@@ -303,13 +303,10 @@ class Connection(object):
             while sent < len(data):
                 try:
                     sent += self.conn.send(data)
-                except ssl.SSLError as e:
-                    if e.errno == ssl.SSL_ERROR_WANT_READ:
-                        continue
-                    elif e.errno == ssl.SSL_ERROR_WANT_WRITE:
-                        continue
-                    else:
-                        raise
+                except ssl.SSLWantReadError:
+                    continue
+                except ssl.SSLWantWriteError:
+                    continue
 
     def sendPacket(self, packet):
         """Send a packet to the server.
@@ -326,13 +323,10 @@ class Connection(object):
         while True:
             try:
                 buff = self.conn.recv(bytes_to_read)
-            except ssl.SSLError as e:
-                if e.errno == ssl.SSL_ERROR_WANT_READ:
-                    continue
-                elif e.errno == ssl.SSL_ERROR_WANT_WRITE:
-                    continue
-                else:
-                    raise
+            except ssl.SSLWantReadError:
+                continue
+            except ssl.SSLWantWriteError:
+                continue
             break
         return buff
 
@@ -2640,12 +2634,10 @@ class NonBlockingConnection(Connection):
     def _readRawBytes(self, bytes_to_read):
         try:
             buff = self.conn.recv(bytes_to_read)
-        except ssl.SSLError as e:
-            if e.errno == ssl.SSL_ERROR_WANT_READ:
-                raise RetryIOError()
-            elif e.errno == ssl.SSL_ERROR_WANT_WRITE:
-                raise RetryIOError()
-            raise
+        except ssl.SSLWantReadError:
+            raise RetryIOError()
+        except ssl.SSLWantWriteError:
+            raise RetryIOError()
         except socket.error as e:
             if e.errno == errno.EAGAIN:
                 # Read operation would block, we're done until
@@ -2684,13 +2676,10 @@ class NonBlockingConnection(Connection):
                 r = 0
                 try:
                     r = self.conn.send(data)
-                except ssl.SSLError as e:
-                    if e.errno == ssl.SSL_ERROR_WANT_READ:
-                        raise RetryIOError()
-                    elif e.errno == ssl.SSL_ERROR_WANT_WRITE:
-                        raise RetryIOError()
-                    else:
-                        raise
+                except ssl.SSLWantReadError:
+                    raise RetryIOError()
+                except ssl.SSLWantWriteError:
+                    raise RetryIOError()
                 except socket.error as e:
                     if e.errno == errno.EAGAIN:
                         self.log.debug("Write operation on %s would block"
