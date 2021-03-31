@@ -109,26 +109,6 @@ def best_tls_version():
         raise ConnectionError('No supported TLS version available.')
 
 
-def create_ssl_context():
-    tls_version = best_tls_version()
-    context = ssl.SSLContext(tls_version)
-
-    # Disable TLSv1.3
-    # According to https://bugs.python.org/issue43622#msg389497, an event on
-    # ssl socket can happen without data being available at application level.
-    # As gear is using a polling loop with multiple file descriptors and ssl
-    # socket used as a blocking one, a blocked state could happen.
-    # This is highlighted by Zuul SSL test: TestSchedulerSSL, where such
-    # blocked state appears consistently.
-    # note: gear tests and zuul tests are ok for TLSv1.2 but this behavior
-    # could also happen
-    if (hasattr(ssl, 'PROTOCOL_TLS') and
-            tls_version == ssl.PROTOCOL_TLS):
-        context.options |= ssl.OP_NO_TLSv1_3
-
-    return context
-
-
 class Task(object):
     def __init__(self):
         self._wait_event = threading.Event()
@@ -247,7 +227,7 @@ class Connection(object):
 
             if self.use_ssl:
                 self.log.debug("Using SSL")
-                context = create_ssl_context()
+                context = ssl.SSLContext(best_tls_version())
                 context.verify_mode = ssl.CERT_REQUIRED
                 context.check_hostname = False
                 context.load_cert_chain(self.ssl_cert, self.ssl_key)
@@ -1267,9 +1247,10 @@ class BaseClient(BaseClientServer):
             for conn in self.active_connections + self.inactive_connections:
                 if conn.host == host and conn.port == port:
                     raise ConfigurationError("Host/port already specified")
-            conn = Connection(host, port, ssl_key, ssl_cert, ssl_ca,
-                              self.client_id, keepalive, tcp_keepidle,
-                              tcp_keepintvl, tcp_keepcnt)
+            conn = NonBlockingConnection(host, port, ssl_key, ssl_cert, ssl_ca,
+                                         self.client_id, keepalive,
+                                         tcp_keepidle, tcp_keepintvl,
+                                         tcp_keepcnt)
             self.inactive_connections.append(conn)
             self.connections_condition.notifyAll()
         finally:
@@ -2619,11 +2600,13 @@ class ServerAdminRequest(AdminRequest):
 class NonBlockingConnection(Connection):
     """A Non-blocking connection to a Gearman Client."""
 
-    def __init__(self, host, port, ssl_key=None, ssl_cert=None,
-                 ssl_ca=None, client_id='unknown'):
+    def __init__(self, host, port, ssl_key=None, ssl_cert=None, ssl_ca=None,
+                 client_id='unknown', keepalive=False, tcp_keepidle=7200,
+                 tcp_keepintvl=75, tcp_keepcnt=9):
         super(NonBlockingConnection, self).__init__(
             host, port, ssl_key,
-            ssl_cert, ssl_ca, client_id)
+            ssl_cert, ssl_ca, client_id, keepalive,
+            tcp_keepidle, tcp_keepintvl, tcp_keepcnt)
         self.send_queue = []
 
     def connect(self):
@@ -2889,7 +2872,7 @@ class Server(BaseClientServer):
                     self.log.debug("Accepting new connection")
                     c, addr = self.socket.accept()
                     if self.use_ssl:
-                        context = create_ssl_context()
+                        context = ssl.SSLContext(best_tls_version())
                         context.verify_mode = ssl.CERT_REQUIRED
                         context.load_cert_chain(self.ssl_cert, self.ssl_key)
                         context.load_verify_locations(self.ssl_ca)
